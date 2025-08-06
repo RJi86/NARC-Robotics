@@ -9,11 +9,11 @@ MotorClass::MotorClass() {
     pinMode(pinArray[i][1], OUTPUT);
     pinMode(pinArray[i][2], OUTPUT);
     digitalWrite(pinArray[i][2], LOW);
-  }
+  } // pins - direction (+,-), power, brake(0/1)
 }
 
 void MotorClass::MoveDirection(float theta) {
-  const float value = sqrt(2) / 4;
+  const float value = sqrt(2) / 2; // sin(45)
 
   const float speedJust[4][3] = {
     { -value, value, 0.25 }, 
@@ -22,12 +22,12 @@ void MotorClass::MoveDirection(float theta) {
     { value, value, 0.25 }
   };
 
-  float motion[4] = {0};
+  float motion[4] = {0}; // four motor speeds
   float x = 1;
   float y = tan(theta);
   //float w = 0;  // no rotation
 
-  if (theta > _pi / 4) {
+  if (theta > _pi / 4) { // if angle > 45, tan > 1
     y = 1;
     x = 1 / tan(theta);
   }
@@ -43,4 +43,5 @@ void MotorClass::MoveDirection(float theta) {
     }
     analogWrite(pinArray[i][1], abs(motion[i]));
   }
+
 }
