@@ -1,13 +1,10 @@
 #pragma once
-
 #include <Arduino.h>
 
-class analog_t
-{
+class analog_t {
 public:
-	analog_t(const uint8_t pin);
-
-	uint16_t read() const;
+explicit analog_t(uint8_t pin) : m_pin(pin) {}
+uint16_t read() const { return analogRead(m_pin); }
 private:
-	const uint8_t m_pin;
+const uint8_t m_pin;
 };

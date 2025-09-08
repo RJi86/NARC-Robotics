@@ -6,12 +6,10 @@
 #define PIN_S00 2
 #define PIN_S01 3
 #define PIN_S02 4
-
 #define PIN_A10 A1
 #define PIN_S10 5
 #define PIN_S11 6
 #define PIN_S12 7
-
 #define PIN_A20 A2
 #define PIN_S20 8
 #define PIN_S21 9
@@ -32,7 +30,7 @@ void setup() {
 }
 
 static uint16_t readStable(analog_multi_t& mux, uint8_t ch) {
-  // Mask to 0..7 to be safe- i have no idea how you use the channels
+  // Mask to 0..7 to be safe- i have no idea how you use the channels // no this is because of binary situations
   ch &= 0x07;
   // First read to settle ADC after channel switch
   (void)mux.read(ch);
