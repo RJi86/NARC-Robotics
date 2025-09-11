@@ -1,5 +1,5 @@
 #include <math.h>
-#include <SoftwareSerial.h>
+#include "../SoftwareSerialTX/src/SoftwareSerialTX.h"
 #include <Arduino.h>
 #include <MotorClass.h>
 

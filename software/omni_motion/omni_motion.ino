@@ -1,6 +1,6 @@
 #include <math.h>
-#include "SoftwareSerialTX.h"
-#include <"MotorClass.h">
+#include "../SoftwareSerialTX/src/SoftwareSerialTX.h"
+#include "motors/MotorClass.h"
 #include <Arduino.h>
 
 MotorClass omnimotion();

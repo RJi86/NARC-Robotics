@@ -2,9 +2,9 @@
 #include <Arduino.h>
 #include "controllers/IRSensorController.h"
 #include "controllers/LightSensorController.h"
-#include "controllers/DirectionUtils.h"
+#include "controllers/angle_utils.h"
 #include "config/OffenseConfig.h"
-#include "sensors/Gyro.h"
+#include "sensors/gyro.h"
 #include "motion/MotorClass.h"
 
 class OffenseController {
