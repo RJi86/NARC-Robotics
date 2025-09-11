@@ -22,7 +22,7 @@ void MotorClass::MoveDirection(float theta, float speed) {
     { value, value, 0.25 }
   };
 
-  float motion[4] = {0}; // four motor speeds
+  float motion[3] = {0}; // four motor speeds
   float x = 1;
   float y = tan(theta);
   //float w = 0;  // no rotation
@@ -46,3 +46,18 @@ void MotorClass::MoveDirection(float theta, float speed) {
 
 }
 
+void MotorClass::Rotation(int countera, float speed) {
+  switch(countera) {
+    case 0:
+      for (byte i = 0; i < 4; i++) {
+        digitalWrite(pinArray[i][0], HIGH);
+        analogWrite(pinArray[i][1], speed);
+    } 
+    break;
+    case 1:
+      for (byte i = 0; i < 4; i++) {
+        digitalWrite(pinArray[i][0], LOW);
+        analogWrite(pinArray[i][1], speed);
+    }
+    break;
+}
