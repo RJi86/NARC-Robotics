@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "controllers/BaseSensorController.h"
-#include "controllers/DirectionUtils.h"
+#include "controllers/angle_utils.h"
 
 class VisionFusion {
 public:
