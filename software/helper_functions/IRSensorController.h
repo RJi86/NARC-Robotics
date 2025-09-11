@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "IRcluster/IRRing.h"
 #include "controllers/BaseSensorController.h"
-#include "controllers/DirectionUtils.h"
+#include "controllers/angle_utils.h"
 
 class IRSensorController : public BaseSensorController {
 public:
