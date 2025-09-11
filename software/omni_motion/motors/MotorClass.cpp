@@ -12,7 +12,7 @@ MotorClass::MotorClass() {
   } // pins - direction (+,-), power, brake(0/1)
 }
 
-void MotorClass::MoveDirection(float theta) {
+void MotorClass::MoveDirection(float theta, float speed) {
   const float value = sqrt(2) / 2; // sin(45)
 
   const float speedJust[4][3] = {
@@ -34,7 +34,7 @@ void MotorClass::MoveDirection(float theta) {
 
   for (byte i = 0; i < 4; i++) {
     motion[i] = speedJust[i][0] * x + speedJust[i][1] * y; //+ speedJust[i][2] * w;
-    motion[i] *= 255;  // Scale to Pin range (-255 to 255)
+    motion[i] *= speed;  // Scale to intended speed
   }
 
   for (byte i = 0; i < 4; i++) {
@@ -45,3 +45,4 @@ void MotorClass::MoveDirection(float theta) {
   }
 
 }
+
