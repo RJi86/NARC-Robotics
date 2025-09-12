@@ -1,6 +1,7 @@
 import sensor
 import time
 import math
+from pyb import UART  # Add UART import
 
 # Yellow and blue color tracking thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
 yellow_threshold = (50, 100, -10, 30, 30, 127)
@@ -30,6 +31,10 @@ yellow_distance_measurements = []
 blue_distance_measurements = []
 enemy_goal_color_name = None
 home_goal_color_name = None
+
+# Initialize UART communication
+uart = UART(3, 115200, timeout_char=1000)
+uart.init(115200, bits=8, parity=None, stop=1, timeout_char=1000)
 
 # Step 1: Initialize the camera
 sensor.reset()
@@ -120,7 +125,10 @@ def send_goal_data_to_arduino(goal_type, distance_cm, height_pixels, x_pos, y_po
         # Format: TYPE,distance,height,x,y\n
         # TYPE is 'E' for enemy, 'H' for home
         data_string = f"{goal_type},{distance_cm:.1f},{height_pixels},{x_pos},{y_pos}\n"
-        print(data_string, end='')  # Send to UART (Arduino)
+        
+        # Send data over UART
+        uart.write(data_string.encode())
+        
         # Also print to console for debugging
         print(f"Sent to Arduino: {data_string.strip()}")
     except Exception as e:
