@@ -1,11 +1,9 @@
 #ifndef GOAL_H
 #define GOAL_H
 
-
 struct GoalData {
   bool detected;
   float distance;
-  float width;
   int x;
   int y;
   unsigned long lastUpdateTime;
@@ -14,5 +12,4 @@ struct GoalData {
 extern GoalData enemyGoal;
 extern GoalData homeGoal;
 
-
-#endif GOAL_H
+#endif // GOAL_H
