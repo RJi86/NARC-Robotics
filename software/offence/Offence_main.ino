@@ -20,4 +20,10 @@ void setup(){
   Serial.begin(115200); while(!Serial){}
   Serial.println(F("Offense main online"));
   gyro.begin();
-  offence.begin()
+  offence.begin();
+}
+
+void loop(){
+  offence.step();
+  delay(10);
+}
