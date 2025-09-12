@@ -1,14 +1,5 @@
 // Robot_Control.ino - Main robot control program
-
-// Structure to hold goal detection data
-struct GoalData {
-  bool detected;
-  float distance;
-  float width;
-  int x;
-  int y;
-  unsigned long lastUpdateTime;
-};
+#include <goal.h>
 
 // Goal detection data
 GoalData enemyGoal = {false, 0, 0, 0, 0, 0};
