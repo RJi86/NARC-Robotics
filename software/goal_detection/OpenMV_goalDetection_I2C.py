@@ -1,7 +1,19 @@
 import sensor
 import time
 import math
-from machine import I2C
+from machine import I2C, Pin
+
+# I2C Configuration
+I2C_ADDRESS = 0x08  # Must match Arduino's address
+DATA_PACKET_SIZE = 5
+
+# Initialize I2C
+try:
+    i2c = I2C(1, freq=50000)  # Use I2C bus 2 with 100kHz frequency
+    print("I2C initialized successfully")
+except Exception as e:
+    print(f"I2C initialization failed: {e}")
+    i2c = None
 
 # Yellow and blue color tracking thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
 yellow_threshold = (50, 100, -10, 30, 30, 127)
@@ -31,18 +43,6 @@ yellow_distance_measurements = []
 blue_distance_measurements = []
 enemy_goal_color_name = None
 home_goal_color_name = None
-
-# I2C Configuration
-I2C_ADDRESS = 0x08  # Arduino's I2C address (must match Arduino code)
-DATA_PACKET_SIZE = 5  # Goal type (1 byte) + distance (2 bytes) + x,y position (2 bytes)
-
-# Initialize I2C
-try:
-    i2c = I2C(2, freq=100000)  # Use I2C bus 2 with 100kHz frequency
-    print("I2C initialized successfully")
-except Exception as e:
-    print(f"I2C initialization failed: {e}")
-    i2c = None
 
 # Step 1: Initialize the camera
 sensor.reset()
@@ -96,7 +96,7 @@ def find_largest_blob_by_color(blobs, color_threshold):
     """Find the largest blob matching a specific color threshold"""
     largest_blob = None
     largest_area = 0
-    
+
     for blob in blobs:
         # Check if this blob matches our color (code 1 for first threshold, code 2 for second)
         blob_matches = False
@@ -104,13 +104,13 @@ def find_largest_blob_by_color(blobs, color_threshold):
             blob_matches = True
         elif color_threshold == blue_threshold and blob.code() == 2:
             blob_matches = True
-        
+
         if blob_matches:
             area = blob.w() * blob.h()
             if area > largest_area:
                 largest_area = area
                 largest_blob = blob
-    
+
     return largest_blob
 
 def safe_frame_operation():
@@ -127,84 +127,66 @@ def safe_frame_operation():
             print(f"Second frame capture failed: {e}")
             return None
 
-def send_goal_data_to_arduino_i2c(goal_type, distance_cm, height_pixels, x_pos, y_pos):
+def send_goal_data_to_arduino(goal_type, distance_cm, height_pixels, x_pos, y_pos):
     """Send goal detection data to Arduino via I2C"""
-    if i2c is None:
-        print("I2C not initialized, cannot send data")
-        return
-    
     try:
-        # Prepare data packet
-        # Goal type: 'E' (0x45) for enemy, 'H' (0x48) for home
-        goal_type_byte = ord(goal_type)
-        
-        # Convert distance to integer (multiply by 10 to preserve one decimal place)
-        distance_int = int(distance_cm * 10)
-        
-        # Clamp distance to fit in 2 bytes (0-6553.5 cm range)
-        if distance_int > 65535:
-            distance_int = 65535
-        elif distance_int < 0:
-            distance_int = 0
-            
-        # Split distance into high and low bytes
+        # Prepare data packet: [goal_type, distance_high, distance_low, x_pos, y_pos]
+        distance_int = int(distance_cm * 10)  # Convert to integer with 0.1 precision
         distance_high = (distance_int >> 8) & 0xFF
         distance_low = distance_int & 0xFF
-        
-        # Clamp x and y positions to byte range
-        x_byte = max(0, min(255, int(x_pos)))
-        y_byte = max(0, min(255, int(y_pos)))
-        
+
+        # Ensure x and y positions fit in byte range (0-255)
+        x_pos = max(0, min(255, int(x_pos)))
+        y_pos = max(0, min(255, int(y_pos)))
+
         # Create data packet
-        data_packet = bytearray([goal_type_byte, distance_high, distance_low, x_byte, y_byte])
-        
-        # Send data via I2C
+        data_packet = bytearray([
+            ord(goal_type),  # 'E' or 'H' as byte
+            distance_high,   # High byte of distance
+            distance_low,    # Low byte of distance
+            x_pos,           # X position
+            y_pos            # Y position
+        ])
+
+        # Send via I2C
         i2c.writeto(I2C_ADDRESS, data_packet)
-        
-        # Debug output
-        print(f"I2C sent: {goal_type}, {distance_cm:.1f}cm, pos({x_pos},{y_pos})")
-        
+
+        # Also print to console for debugging
+        print(f"Sent to Arduino via I2C: {goal_type},{distance_cm:.1f},{height_pixels},{x_pos},{y_pos}")
+
     except Exception as e:
-        print(f"Error sending I2C data: {e}")
-        # Try to reinitialize I2C if it fails
-        try:
-            i2c.deinit()
-            time.sleep(100)  # 100ms delay
-            i2c = I2C(2, freq=100000)
-            print("I2C reinitialized after error")
-        except Exception as reinit_error:
-            print(f"I2C reinitialization failed: {reinit_error}")
+        print(f"Error sending data to Arduino via I2C: {e}")
 
 # Step 3: Main loop to detect the enemy goal color and blobs
 while True:
     try:
         clock.tick()
         img = safe_frame_operation()
-        
+
         if img is None:
             continue  # Skip this iteration if frame capture failed
-        
+
         # Initial enemy goal detection with 3-second buffer
         if not initial_detection_done:
             current_time = time.ticks_ms()
-            
+
             # Start the detection timer on first run
             if detection_start_time is None:
                 detection_start_time = current_time
                 print("Starting 3-second goal detection phase...")
                 print("Keep camera steady and ensure both goals are visible!")
-            
+
             # Check if we're still in the 3-second detection window
             if time.ticks_diff(current_time, detection_start_time) < DETECTION_BUFFER_TIME:
                 # Find blobs for both colors
                 all_blobs = img.find_blobs([yellow_threshold, blue_threshold],
                                          pixels_threshold=MIN_BLOB_SIZE,
                                          area_threshold=MIN_BLOB_SIZE*2)
-                
+
                 # Find largest blob of each color
                 yellow_blob = find_largest_blob_by_color(all_blobs, yellow_threshold)
                 blue_blob = find_largest_blob_by_color(all_blobs, blue_threshold)
-                
+
                 # Measure distances if blobs are found
                 if yellow_blob and yellow_blob.h() > 0:
                     yellow_distance = calculate_distance(yellow_blob.h())
@@ -214,7 +196,7 @@ while True:
                         img.draw_rectangle(yellow_blob.rect(), color=(255, 255, 0))
                         img.draw_string(yellow_blob.cx(), yellow_blob.cy() - 20,
                                       f"Y: {yellow_distance:.1f}cm", color=(255, 255, 0))
-                
+
                 if blue_blob and blue_blob.h() > 0:
                     blue_distance = calculate_distance(blue_blob.h())
                     if blue_distance != float('inf'):
@@ -223,21 +205,21 @@ while True:
                         img.draw_rectangle(blue_blob.rect(), color=(0, 0, 255))
                         img.draw_string(blue_blob.cx(), blue_blob.cy() - 20,
                                       f"B: {blue_distance:.1f}cm", color=(0, 0, 255))
-                
+
                 # Show countdown
                 remaining_time = (DETECTION_BUFFER_TIME - time.ticks_diff(current_time, detection_start_time)) / 1000.0
                 img.draw_string(10, 10, f"Detection: {remaining_time:.1f}s", color=(255, 255, 255))
-                
+
             else:
                 # Detection period is over, analyze results
                 if len(yellow_distance_measurements) > 0 and len(blue_distance_measurements) > 0:
                     # Calculate average distances
                     avg_yellow_distance = sum(yellow_distance_measurements) / len(yellow_distance_measurements)
                     avg_blue_distance = sum(blue_distance_measurements) / len(blue_distance_measurements)
-                    
+
                     print(f"Average Yellow distance: {avg_yellow_distance:.1f}cm")
                     print(f"Average Blue distance: {avg_blue_distance:.1f}cm")
-                    
+
                     # The further goal is the enemy goal
                     if avg_yellow_distance > avg_blue_distance:
                         enemy_goal_color = yellow_threshold
@@ -249,18 +231,18 @@ while True:
                         home_goal_color = yellow_threshold
                         enemy_goal_color_name = "Blue"
                         home_goal_color_name = "Yellow"
-                    
+
                     initial_detection_done = True
                     print(f"Enemy goal color determined: {enemy_goal_color_name} (further away)")
                     print(f"Home goal color determined: {home_goal_color_name} (closer)")
-                    
+
                 else:
                     # Reset detection if we didn't get good measurements
                     print("Insufficient measurements, restarting detection...")
                     detection_start_time = None
                     yellow_distance_measurements.clear()
                     blue_distance_measurements.clear()
-                    
+
         else:
             # Normal operation after initial detection
             # Get all blobs with sufficient size
@@ -276,10 +258,21 @@ while True:
                 # Calculate blob area
                 area = blob.w() * blob.h()
 
-                if blob.code() == 1:  # Enemy goal blob
+                # Fix: Check which color this blob corresponds to
+                if enemy_goal_color == yellow_threshold and blob.code() == 1:
+                    # This is an enemy blob (yellow)
                     if largest_enemy_blob is None or area > largest_enemy_blob.w() * largest_enemy_blob.h():
                         largest_enemy_blob = blob
-                else:  # Home goal blob
+                elif enemy_goal_color == blue_threshold and blob.code() == 2:
+                    # This is an enemy blob (blue)
+                    if largest_enemy_blob is None or area > largest_enemy_blob.w() * largest_enemy_blob.h():
+                        largest_enemy_blob = blob
+                elif home_goal_color == yellow_threshold and blob.code() == 1:
+                    # This is a home blob (yellow)
+                    if largest_home_blob is None or area > largest_home_blob.w() * largest_home_blob.h():
+                        largest_home_blob = blob
+                elif home_goal_color == blue_threshold and blob.code() == 2:
+                    # This is a home blob (blue)
                     if largest_home_blob is None or area > largest_home_blob.w() * largest_home_blob.h():
                         largest_home_blob = blob
 
@@ -289,7 +282,7 @@ while True:
                 blob_height = largest_enemy_blob.h()
                 raw_distance = calculate_distance(blob_height)
                 distance_cm = get_filtered_distance(raw_distance, "enemy")
-                
+
                 if distance_cm is not None:
                     # Draw visual indicators
                     color = (255, 0, 0)  # Red color for enemy blobs
@@ -308,9 +301,9 @@ while True:
                     img.draw_string(largest_enemy_blob.cx(), largest_enemy_blob.cy() - 20,
                                    label, color=color)
 
-                    # Send data to Arduino via I2C
-                    send_goal_data_to_arduino_i2c('E', distance_cm, blob_height, 
-                                                largest_enemy_blob.cx(), largest_enemy_blob.cy())
+                    # Send data to Arduino
+                    send_goal_data_to_arduino('E', distance_cm, blob_height,
+                                            largest_enemy_blob.cx(), largest_enemy_blob.cy())
 
             # Process the largest home blob if found
             if largest_home_blob and largest_home_blob.h() > 0:
@@ -318,7 +311,7 @@ while True:
                 blob_height = largest_home_blob.h()
                 raw_distance = calculate_distance(blob_height)
                 distance_cm = get_filtered_distance(raw_distance, "home")
-                
+
                 if distance_cm is not None:
                     # Draw visual indicators
                     color = (0, 255, 0)  # Green color for home blobs
@@ -337,12 +330,12 @@ while True:
                     img.draw_string(largest_home_blob.cx(), largest_home_blob.cy() - 20,
                                    label, color=color)
 
-                    # Send data to Arduino via I2C
-                    send_goal_data_to_arduino_i2c('H', distance_cm, blob_height, 
-                                                largest_home_blob.cx(), largest_home_blob.cy())
+                    # Send data to Arduino
+                    send_goal_data_to_arduino('H', distance_cm, blob_height,
+                                            largest_home_blob.cx(), largest_home_blob.cy())
 
         print(f"FPS: {clock.fps()}")
-        
+
     except Exception as e:
         print(f"Main loop error: {e}")
         # Add a small delay to prevent rapid error loops

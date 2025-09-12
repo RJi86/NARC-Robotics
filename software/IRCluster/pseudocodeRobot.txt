@@ -1,0 +1,140 @@
+CONSTANTS
+    FOV_HALF           := camera_horizontal_fov / 2              // radians- btw fov is feild of view- seeing if the two bearings (the bearings of both goals) can fit in BOTH robots field of view. 
+    VISION_MARGIN      := deg2rad(7)                              // safety margin for FOV
+    DEFENSE_RADIUS     := 0.55 m                                   // distance from home goal to hold the line
+    DEFENSE_BOX_XY     := region_in_front_of_goal()   // we need to go back and check            // clamp area (your "first quadrant" / home half)
+    YAW_RATE_LIMIT     := 180 deg/s
+    MAX_SPEED          := limited_speed_value
+
+STATE
+    robot.pose         := (x, y, theta)
+    ball.pose          := (bx, by) with velocity (optional)
+    home_goal.pose     := (gx, gy)
+
+UTILS
+    function wrap_pi(a): ...                                     
+    function bearing_to(p): return atan2(p.y - robot.y, p.x - robot.x)
+    function angle_diff(a, b): return wrap_pi(a - b)
+    function mid_angle(a, b):
+        d := wrap_pi(b - a)
+        return wrap_pi(a + d/2)
+
+    function visible(target_bearing):
+        return abs(angle_diff(target_bearing, robot.theta)) <= (FOV_HALF - VISION_MARGIN)
+
+    function clamp_to_defense_region(p):
+        p := clamp_to_arc_centered_at(home_goal, radius=DEFENSE_RADIUS, target=p)
+        p := clamp_to_polygon(DEFENSE_BOX_XY, p)
+        return p
+
+CORE GEOMETRY (angles between target goal and our goal)
+    // Bearings from robot to both targets
+    beta_ball := bearing_to(ball.pose)
+    beta_goal := bearing_to(home_goal.pose)
+
+    // Angle between the two target bearings (signed, in radians)
+    delta_targets := wrap_pi(beta_ball - beta_goal)
+
+    // Heading that centers both targets in the camera:
+    theta_des := mid_angle(beta_goal, beta_ball)
+
+    // Smallest rotation required to adopt that heading:
+    rot_needed := angle_diff(theta_des, robot.theta)
+
+DEFENSIVE POSITIONING (stay between ball and home goal)
+    // Point on the goal->ball line, at a fixed radius from the goal (keeper line)
+    function defense_arc_point():
+        gb_vec := normalize(ball.pose - home_goal.pose)
+        p := home_goal.pose + DEFENSE_RADIUS * gb_vec
+        return clamp_to_defense_region(p)
+
+    // If FOV can’t contain both bearings, reposition along the defense arc so they become colinear from robot POV
+    function ensure_dual_visibility_or_reposition():
+        if abs(delta_targets) <= 2*(FOV_HALF - VISION_MARGIN):
+            // both can fit in FOV if we face their midpoint
+            return ("OK", theta_des, null)
+        else
+            // move to the goal->ball line on the defense arc; then both bearings align
+            p_des := defense_arc_point()
+            return ("MOVE", theta_des, p_des)
+
+CONTROL LOOP (run at 50–100 Hz)
+    loop:
+        sense(ball, home_goal, robot)
+        beta_ball := bearing_to(ball)
+        beta_goal := bearing_to(home_goal)
+        delta_targets := wrap_pi(beta_ball - beta_goal)
+        theta_des := mid_angle(beta_goal, beta_ball)
+
+        mode, theta_cmd, p_cmd := ensure_dual_visibility_or_reposition()
+
+        // Always bias heading to keep both in view (never rotate past the FOV bounds)
+        yaw_err := angle_diff(theta_cmd, robot.theta)
+        yaw_rate := clamp(kp_yaw*yaw_err, -YAW_RATE_LIMIT, +YAW_RATE_LIMIT)
+
+        if mode == "OK":
+            // Lateral “shadowing” along the defense arc to stay between ball and goal
+            p_shadow := defense_arc_point()
+            v_cmd := lateral_controller(robot.pose, p_shadow, MAX_SPEED)   // move mainly tangentially along the arc
+        else if mode == "MOVE":
+            v_cmd := go_to(robot.pose, p_cmd, MAX_SPEED)
+
+        // If ball is inside a critical cone, bias to block the shot line
+        if ball_in_shot_cone(ball, home_goal, width=goal_mouth_width, margin=some_angle):
+            p_block := closest_point_on_line_segment(home_goal, ball, constrained_to_defense_arc=true)
+            v_cmd := go_to(robot.pose, clamp_to_defense_region(p_block), MAX_SPEED)
+
+        // Safety / constraints
+        v_cmd := avoid_goal_area_illegal_entries(v_cmd)
+        v_cmd := avoid_teammates_with_min_comm(v_cmd)              // see “Limited comms” below
+
+        // Apply commands
+        set_body_yaw_rate(yaw_rate)
+        set_body_velocity(v_cmd)
+
+        // If either target not visible (occlusion), fail-safe posture:
+        if NOT visible(beta_ball) OR NOT visible(beta_goal):
+            // rotate only toward midpoint WITHOUT exceeding FOV bounds of the other
+            // else, retreat to center on defense arc
+            if abs(delta_targets) <= 2*(FOV_HALF - VISION_MARGIN):
+                set_body_yaw_rate(yaw_rate)
+            else
+                set_body_velocity(go_to(robot.pose, defense_arc_point(), MAX_SPEED*0.7))
+
+LIMITED COMMUNICATION: implicit role & collision rules (works if radio drops)
+    // Each defender runs the same rules; no chatter needed
+    // 1) Territoriality: only act if ball.x is in our half (or "first quadrant" for your field split)
+    // 2) Priority: the robot with smaller time-to-arc (T_arc = dist(robot, defense_arc_point)/MAX_SPEED) owns the block
+    // 3) Yielding: the slower robot shrinks its operating arc segment toward the far post
+    // 4) No-go overlap: maintain minimum separation bubble R_safe; if violated, inner robot (closer to goal center) has right of way
+    // 5) Emergency clear: if ball distance to goal < CLEAR_THRESH and you are the priority robot, step inward on arc by Δr and face beta_ball
+
+MATH SNIPPETS YOU CAN LIFT
+    // Rotation angles between two targets:
+    beta_ball := atan2(by - y, bx - x)
+    beta_goal := atan2(gy  - y, gx - x)
+    delta_targets := wrap_pi(beta_ball - beta_goal)               // signed separation angle
+    theta_des := wrap_pi(beta_goal + delta_targets/2)             // face midpoint so both fit in view
+    rot_needed := wrap_pi(theta_des - theta)                      // smallest rotation to desired heading
+
+    // Condition to “never let rotation limit vision” (i.e., both inside FOV if we face theta_des):
+    fits_in_fov := abs(delta_targets) <= 2*(FOV_HALF - VISION_MARGIN)
+
+    // Defense-arc footpoint (between ball & goal)
+    gb := normalize([bx - gx, by - gy])
+    p_des := [gx, gy] + DEFENSE_RADIUS * gb
+
+    // Lateral controller (holonomic): move tangentially along arc while keeping heading ~ theta_des
+    function lateral_controller(p, p_des, vmax):
+        e := p_des - p
+        t_hat := rotate90(normalize(p - home_goal))               // tangent direction on the arc
+        v := project(e, onto=t_hat) * k_tangential
+        return clamp_norm(v, vmax)
+
+EDGE CASES / EXTRAS
+    // If |delta_targets| is huge (ball near touchline, you near far post) and FOV can’t cover both:
+    //   — prefer reposition (on the goal->ball line) over rotating away from goal
+    // If ball behind you (beta_ball opposite goal bearing):
+    //   — immediately rotate toward theta_des, but cap yaw_rate so goal bearing stays inside FOV ± margin during the turn
+    // If ball leaves your half:
+    //   — tuck to center on the defense arc and face upfield; hold position
