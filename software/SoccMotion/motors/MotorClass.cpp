@@ -9,6 +9,8 @@ MotorClass::MotorClass() {
     pinMode(pinArray[i][1], OUTPUT);
     pinMode(pinArray[i][2], OUTPUT);
     digitalWrite(pinArray[i][2], LOW);
+    digitalWrite(pinArray[i][0], HIGH);
+    analogWrite(pinArray[i][1], 0);
   } // pins - direction (+,-), power, brake(0/1)
 }
 
@@ -40,6 +42,7 @@ void MotorClass::MoveDirection(float theta, float speed) {
   for (byte i = 0; i < 4; i++) {
     if (motion[i] < 0) {
       digitalWrite(pinArray[i][0], LOW);  // move backward if velocity is negative
+      digitalWrite(pinArray[i][2], HIGH);
     }
     analogWrite(pinArray[i][1], abs(motion[i]));
   }
@@ -51,13 +54,16 @@ void MotorClass::Rotation(int countera, float speed) {
     case 0:
       for (byte i = 0; i < 4; i++) {
         digitalWrite(pinArray[i][0], HIGH);
+        digitalWrite(pinArray[i][2], LOW);
         analogWrite(pinArray[i][1], speed);
     } 
     break;
     case 1:
       for (byte i = 0; i < 4; i++) {
         digitalWrite(pinArray[i][0], LOW);
+        digitalWrite(pinArray[i][2], HIGH);
         analogWrite(pinArray[i][1], speed);
     }
     break;
 }
+
