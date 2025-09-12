@@ -10,27 +10,27 @@ public:
 private:
   const float _pi = 3.14159265358979323846;
   struct {
-    byte dirPin = 2;
-    byte pwmPin = 3;
-    byte brakePin = 4;
+    byte dirPin = 28;
+    byte pwmPin = 6;
+    byte brakePin = 29;
   } TL_Motor;
 
   struct {
-    byte dirPin = 5;
-    byte pwmPin = 6;
-    byte brakePin = 7;
+    byte dirPin = 30;
+    byte pwmPin = 7;
+    byte brakePin = 31;
   } TR_Motor;
 
   struct {
-    byte dirPin = 8;
-    byte pwmPin = 9;
-    byte brakePin = 10;
+    byte dirPin = 32;
+    byte pwmPin = 8;
+    byte brakePin = 33;
   } BL_Motor;
 
   struct {
-    byte dirPin = 11;
-    byte pwmPin = 12;
-    byte brakePin = 13;
+    byte dirPin = 34;
+    byte pwmPin = 9;
+    byte brakePin = 35;
   } BR_Motor;
 
   const byte pinArray[4][3] = {
@@ -40,5 +40,6 @@ private:
     { BR_Motor.dirPin, BR_Motor.pwmPin, BR_Motor.brakePin }
   };
 };
+
 
 #endif
