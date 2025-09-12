@@ -3,7 +3,7 @@
 
 struct GoalData {
   bool detected;
-  float distance;
+  float distance;  // Only distance now, no width
   int x;
   int y;
   unsigned long lastUpdateTime;
@@ -12,4 +12,4 @@ struct GoalData {
 extern GoalData enemyGoal;
 extern GoalData homeGoal;
 
-#endif // GOAL_H
+#endif
