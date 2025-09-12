@@ -3,7 +3,7 @@
 
 struct GoalData {
   bool detected;
-  float distance;  // Only distance now, no width
+  float distance;
   int x;
   int y;
   unsigned long lastUpdateTime;

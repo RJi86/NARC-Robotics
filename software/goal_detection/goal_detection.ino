@@ -1,18 +1,21 @@
 #include <Wire.h>
 #include <goal.h>
 
+// I2C Configuration
+#define I2C_ADDRESS 0x08
+#define DATA_PACKET_SIZE 5
+
 // Goal detection data
 GoalData enemyGoal = {false, 0, 0, 0, 0};
 GoalData homeGoal = {false, 0, 0, 0, 0};
 
 // Constants
 const unsigned long DETECTION_TIMEOUT = 500; // Consider detection lost after 500ms
-const int ARDUINO_I2C_ADDRESS = 0x08;
 
 void setup() {
   // Initialize I2C as slave
-  Wire.begin(ARDUINO_I2C_ADDRESS);
-  Wire.onReceive(receiveGoalData);
+  Wire.begin(I2C_ADDRESS);
+  Wire.onReceive(receiveEvent);
   
   // Initialize USB serial for debugging
   Serial.begin(9600);
@@ -36,41 +39,38 @@ void loop() {
   delay(100);
 }
 
-void receiveGoalData(int numBytes) {
-  if (numBytes != 7) {
-    return; // Invalid data length
+void receiveEvent(int numBytes) {
+  if (numBytes == DATA_PACKET_SIZE) {
+    // Read the data packet
+    char goalType = Wire.read();
+    uint8_t distanceHigh = Wire.read();
+    uint8_t distanceLow = Wire.read();
+    uint8_t xPos = Wire.read();
+    uint8_t yPos = Wire.read();
+    
+    // Reconstruct distance from two bytes
+    float distance = (float)((distanceHigh << 8) | distanceLow);
+    
+    // Update the appropriate goal data
+    if (goalType == 'E') {
+      enemyGoal.detected = true;
+      enemyGoal.distance = distance;
+      enemyGoal.x = (int)xPos;
+      enemyGoal.y = (int)yPos;
+      enemyGoal.lastUpdateTime = millis();
+    } 
+    else if (goalType == 'H') {
+      homeGoal.detected = true;
+      homeGoal.distance = distance;
+      homeGoal.x = (int)xPos;
+      homeGoal.y = (int)yPos;
+      homeGoal.lastUpdateTime = millis();
+    }
   }
   
-  // Read data: [goal_type, distance_high, distance_low, x_high, x_low, y_high, y_low]
-  char goalType = Wire.read();
-  int distanceHigh = Wire.read();
-  int distanceLow = Wire.read();
-  int xHigh = Wire.read();
-  int xLow = Wire.read();
-  int yHigh = Wire.read();
-  int yLow = Wire.read();
-  
-  // Reconstruct values
-  float distance = ((distanceHigh << 8) | distanceLow) / 10.0; // Convert back to float
-  int x = (xHigh << 8) | xLow;
-  int y = (yHigh << 8) | yLow;
-  
-  unsigned long currentTime = millis();
-  
-  // Update appropriate goal data
-  if (goalType == 'E') {
-    enemyGoal.detected = true;
-    enemyGoal.distance = distance;
-    enemyGoal.x = x;
-    enemyGoal.y = y;
-    enemyGoal.lastUpdateTime = currentTime;
-  } 
-  else if (goalType == 'H') {
-    homeGoal.detected = true;
-    homeGoal.distance = distance;
-    homeGoal.x = x;
-    homeGoal.y = y;
-    homeGoal.lastUpdateTime = currentTime;
+  // Clear any remaining bytes
+  while (Wire.available()) {
+    Wire.read();
   }
 }
 
