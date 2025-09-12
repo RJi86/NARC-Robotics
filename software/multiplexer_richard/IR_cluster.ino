@@ -1,19 +1,22 @@
 #include <Wire.h>
+#include "functions/analog.h"
+#include "functions/analog_multi.h"
+#include "functions/pins.h"
 #include "IRcluster.h"
 #include "ClusterConfig.h"
 
 #define THRESHOLD 120 // threshold value (adjustable)
 
-// Define the three multiplexers (analog pin, S0, S1, S2)
-analog_multi_t IRcluster_1(PIN_A0, PIN_PD0, PIN_PD1, PIN_PD2);
-analog_multi_t IRcluster_2(PIN_PC1, PIN_PD3, PIN_PD4, PIN_PD5);
-analog_multi_t IRcluster_3(PIN_PC2, PIN_PD6, PIN_PD7, PIN_PB0);
+// Define the three multiplexers using the pins from Pins.h
+analog_multi_t IRcluster_1(MUX0_SIG, MUX0_S0, MUX0_S1, MUX0_S2);
+analog_multi_t IRcluster_2(MUX1_SIG, MUX1_S0, MUX1_S1, MUX1_S2);
+analog_multi_t IRcluster_3(MUX2_SIG, MUX2_S0, MUX2_S1, MUX2_S2);
 
 // Arrays to store sensor readings
 uint16_t cluster1_values[8] = {0};
 uint16_t cluster2_values[8] = {0};
 uint16_t cluster3_values[8] = {0};
-uint16_t all_sensor_values[24] = {0};
+uint16_t all_sensor_values[24] = {0}; // Combined array for all sensors
 
 unsigned long lastPrintTime = 0;
 const unsigned long printInterval = 500; // Print every 500ms
@@ -90,9 +93,3 @@ void printSensorValues() {
     }
   }
   Serial.print(F("\nHighest reading: Sensor "));
-  Serial.print(maxIdx);
-  Serial.print(F(" = "));
-  Serial.println(maxVal);
-  
-  Serial.println(F("----------------------------"));
-}
