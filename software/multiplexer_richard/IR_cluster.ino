@@ -93,3 +93,9 @@ void printSensorValues() {
     }
   }
   Serial.print(F("\nHighest reading: Sensor "));
+  Serial.print(maxIdx);
+  Serial.print(F(" = "));
+  Serial.println(maxVal);
+  
+  Serial.println(F("----------------------------"));
+}
