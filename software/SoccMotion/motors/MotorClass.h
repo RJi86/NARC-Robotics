@@ -6,7 +6,8 @@
 class MotorClass {
 public:
   MotorClass();
-  void MoveDirection(float theta);
+  void MoveDirection(float theta, float speed);
+  void Rotation(int countera, float speed);
 private:
   const float _pi = 3.14159265358979323846;
   struct {
