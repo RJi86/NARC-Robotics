@@ -1,5 +1,4 @@
 #include <math.h>
-#include "../SoftwareSerialTX/src/SoftwareSerialTX.h"
 #include <Arduino.h>
 #include <MotorClass.h>
 
@@ -19,8 +18,8 @@ void MotorClass::MoveDirection(float theta, float speed) {
 
   const float speedJust[4][3] = {
     { -value, value, 0.25 }, 
-    { -value, -value, 0.25 }, 
-    { value, -value, 0.25 }, 
+    { value, value, -0.25 }, 
+    { -value, value, -0.25 }, 
     { value, value, 0.25 }
   };
 
@@ -65,5 +64,5 @@ void MotorClass::Rotation(int countera, float speed) {
         analogWrite(pinArray[i][1], speed);
     }
     break;
+  }
 }
-
