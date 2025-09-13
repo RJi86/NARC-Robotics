@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include <MotorClass.h>
 
+const float pi = 3.14159265358979323846;
+
 MotorClass::MotorClass() {
   for (byte i = 0; i < 4; i++) {
     pinMode(pinArray[i][0], OUTPUT);
@@ -17,11 +19,22 @@ void MotorClass::MoveDirection(float theta, float speed) {
   const float value = sqrt(2) / 2; // sin(45)
 
   const float speedJust[4][3] = {
-    { -value, value, 0.25 }, 
-    { value, value, -0.25 }, 
-    { -value, value, -0.25 }, 
-    { value, value, 0.25 }
+    { value, -value, 0.25 }, 
+    { -value, -value, -0.25 }, 
+    { value, -value, -0.25 }, 
+    { -value, -value, 0.25 }
   };
+
+  if (theta == pi/2){
+    float x = 0;
+    float y = 1;
+  }
+  else if (theta == 3*pi/2)
+  {
+    float x = 0;
+    float y = -1;
+  }
+  
 
   float motion[3] = {0}; // four motor speeds
   float x = 1;
@@ -51,18 +64,32 @@ void MotorClass::MoveDirection(float theta, float speed) {
 void MotorClass::Rotation(int countera, float speed) {
   switch(countera) {
     case 0:
-      for (byte i = 0; i < 4; i++) {
-        digitalWrite(pinArray[i][0], HIGH);
-        digitalWrite(pinArray[i][2], LOW);
-        analogWrite(pinArray[i][1], speed);
-    } 
+      digitalWrite(pinArray[0][0], LOW);
+      digitalWrite(pinArray[0][1], HIGH);
+      digitalWrite(pinArray[0][2], speed);
+      digitalWrite(pinArray[1][0], LOW);
+      digitalWrite(pinArray[1][1], HIGH);
+      digitalWrite(pinArray[1][2], speed);
+      digitalWrite(pinArray[2][0], HIGH);
+      digitalWrite(pinArray[2][1], LOW);
+      digitalWrite(pinArray[2][2], speed);
+      digitalWrite(pinArray[3][0], HIGH);
+      digitalWrite(pinArray[3][1], LOW);
+      digitalWrite(pinArray[3][2], speed);
     break;
     case 1:
-      for (byte i = 0; i < 4; i++) {
-        digitalWrite(pinArray[i][0], LOW);
-        digitalWrite(pinArray[i][2], HIGH);
-        analogWrite(pinArray[i][1], speed);
-    }
+      digitalWrite(pinArray[0][0], HIGH);
+      digitalWrite(pinArray[0][1], LOW);
+      digitalWrite(pinArray[0][2], speed);
+      digitalWrite(pinArray[1][0], HIGH);
+      digitalWrite(pinArray[1][1], LOW);
+      digitalWrite(pinArray[1][2], speed);
+      digitalWrite(pinArray[2][0], LOW);
+      digitalWrite(pinArray[2][1], HIGH);
+      digitalWrite(pinArray[2][2], speed);
+      digitalWrite(pinArray[3][0], LOW);
+      digitalWrite(pinArray[3][1], HIGH);
+      digitalWrite(pinArray[3][2], speed);
     break;
   }
 }
