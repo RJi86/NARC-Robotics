@@ -92,4 +92,20 @@ void MotorClass::Rotation(int countera, float speed) {
       digitalWrite(pinArray[0][2], LOW);
       analogWrite(pinArray[0][1], speed);
       digitalWrite(pinArray[1][0], HIGH);
-      digitalWrite(pinArray[1]
+      digitalWrite(pinArray[1][2], LOW);
+      analogWrite(pinArray[1][1], speed);
+      digitalWrite(pinArray[2][0], LOW);
+      digitalWrite(pinArray[2][2], HIGH);
+      analogWrite(pinArray[2][1], speed);
+      digitalWrite(pinArray[3][0], LOW);
+      digitalWrite(pinArray[3][2], HIGH);
+      analogWrite(pinArray[3][1], speed);
+    break;
+  }
+}
+
+void MotorClass::Stop(){
+  for (byte i = 0; i < 4; i++) {
+    analogWrite(pinArray[i][1], 0);
+  }
+}
