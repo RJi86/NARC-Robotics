@@ -189,10 +189,12 @@ bool isAngleAligned(int angle) {
   return abs(angle) <= ANGLE_TOLERANCE;
 }
 
-// Function to determine the shortest rotation direction to align with ball
+// Function to determine the rotation direction to align with ball
+// CORRECTED: Matches MotorClass.Rotation parameter meaning
+// Returns 1 for clockwise, 0 for counterclockwise
 int getRotationDirection(int angle) {
-  // If angle is between 0 and 180, rotate counterclockwise (1)
-  // If angle is between 180 and 360, rotate clockwise (0)
+  // If angle is between 0 and 180, rotate clockwise (1)
+  // If angle is between 180 and 360, rotate counterclockwise (0)
   return (angle > 0 && angle <= 180) ? 1 : 0;
 }
 
@@ -226,7 +228,8 @@ void loop() {
           motors.Rotation(rotationDir, ROTATION_SPEED);
           Serial.print("Rotating to align with ball at angle: ");
           Serial.print(ballAngle);
-          Serial.println(" degrees");
+          Serial.print(" degrees. Direction: ");
+          Serial.println(rotationDir == 1 ? "clockwise" : "counterclockwise");
         }
         break;
         
@@ -234,6 +237,7 @@ void loop() {
         // Moving straight towards ball
         if (isAngleAligned(ballAngle)) {
           // Still aligned, keep moving forward
+          // Using direction 0 radians (0 degrees) to move forward
           motors.MoveDirection(0, APPROACH_SPEED);
           
           // Check for consistent angle (ball might be captured)
