@@ -1,8 +1,6 @@
 #include "IRFilters.h"
 static DigitalFilter filters[24]; //one per sensor
 
-
-
 typedef struct {
   bool A0Val;
   bool A1Val;

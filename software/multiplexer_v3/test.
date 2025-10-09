@@ -1,0 +1,80 @@
+typedef struct {
+  bool A0Val;
+  bool A1Val;
+  bool A2Val;
+  byte A0Pin;
+  byte A1Pin;
+  byte A2Pin;
+  int outputPin;
+} Multiplexer;
+
+Multiplexer multiplexer4;
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Configure multiplexer pins
+  multiplexer4.A0Pin = 41;
+  multiplexer4.A1Pin = 40;
+  multiplexer4.A2Pin = 39;
+  multiplexer4.outputPin = 21;
+  
+  // Set multiplexer4 address pins as OUTPUT
+  pinMode(multiplexer4.A0Pin, OUTPUT);
+  pinMode(multiplexer4.A1Pin, OUTPUT);
+  pinMode(multiplexer4.A2Pin, OUTPUT);
+  
+  // Set output pin as INPUT (for analog reading)
+  pinMode(multiplexer4.outputPin, INPUT);
+  
+  analogReadResolution(12); // Increased resolution
+}
+
+// Function to read a specific light sensor from the multiplexer (analog reading)
+int readLightSensor(Multiplexer &mux, int sensorIndex) {
+  // Set address pins based on sensor index (0-7)
+  mux.A0Val = (sensorIndex & 0x01) > 0;  // Bit 0
+  mux.A1Val = (sensorIndex & 0x02) > 0;  // Bit 1
+  mux.A2Val = (sensorIndex & 0x04) > 0;  // Bit 2
+
+  // Set the address pins
+  digitalWrite(mux.A0Pin, mux.A0Val);
+  digitalWrite(mux.A1Pin, mux.A1Val);
+  digitalWrite(mux.A2Pin, mux.A2Val);
+  
+  // Small delay to allow the multiplexer to settle
+  delayMicroseconds(10);
+  
+  // Read the analog output
+  return analogRead(mux.outputPin);
+}
+
+// Function to read all light sensors and return their values
+int* readAllLightSensors() {
+  // Static array to persist after function returns
+  static int lightValues[8];
+  
+  // Read all 8 sensors from multiplexer4
+  for (int i = 0; i < 8; i++) {
+    lightValues[i] = readLightSensor(multiplexer4, i);
+  }
+  
+  return lightValues;
+}
+
+void loop() {
+  // Get all light sensor readings
+  int* readings = readAllLightSensors();
+  
+  // Print all the readings (single header line is more efficient)
+  Serial.println("Light Sensor Readings:");
+  for (int i = 0; i < 8; i++) {
+    Serial.print("Sensor ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(readings[i]);
+  }
+  
+  Serial.println(); // Add a blank line for readability
+  delay(200);  // Delay between readings
+}
