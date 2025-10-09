@@ -1,34 +1,24 @@
-#include "IRFilters.h"
-#include <Arduino.h>
+#include "MultiplexerAngle.h"
 
-static DigitalFilter filters[24]; //one per sensor
-
-typedef struct {
-  bool A0Val;
-  bool A1Val;
-  bool A2Val;
-  byte A0Pin;
-  byte A1Pin;
-  byte A2Pin;
-  int outputPin;
-} Multiplexer;
-
-// Define the angle for each sensor (in degrees)
-// Assuming sensors are arranged in a circle with sensor 0 at 0 degrees,
-// sensor 1 at 15 degrees, and so on
-const int SENSOR_ANGLES[24] = {
+// Initialize the static constant
+const int MultiplexerAngle::SENSOR_ANGLES[24] = {
   270, 255, 240, 225, 210, 195, 180, 165,     // 0..7
   150, 135, 120, 105,  90,  75,  60,  45,     // 8..15
    30,  15,   0, 345, 330, 315, 300, 285      // 16..23  (no 360!)
 };
 
-Multiplexer multiplexer1;
-Multiplexer multiplexer2;
-Multiplexer multiplexer3;
+MultiplexerAngle::MultiplexerAngle() {
+  // Initialize member variables
+  latestAngle = -1.0f; // -1 indicates no ball detected
+  lastOutputTime = 0;
+  
+  // Initialize sensor detections array
+  for (int i = 0; i < 24; i++) {
+    sensorDetections[i] = false;
+  }
+}
 
-void setup() {
-  Serial.begin(115200);
-
+void MultiplexerAngle::begin() {
   // Set up multiplexer 1
   multiplexer1.A0Pin = 38;
   multiplexer1.A1Pin = 37;
@@ -65,44 +55,15 @@ void setup() {
   pinMode(multiplexer2.outputPin, INPUT);
   pinMode(multiplexer3.outputPin, INPUT);
 
+  // Initialize filters
   for (int i = 0; i < 24; i++) {
     filters[i].threshold_on = 2;   // x consecutive ONs to confirm
     filters[i].threshold_off = 1;  // how many OFF to clear
-    filters[i].max_count = 3; // window size
+    filters[i].max_count = 3;      // window size
   }
-
-
 }
 
-static inline float toRad(float deg){ return deg * 0.017453292519943295f; }
-static inline float toDeg(float rad){ return rad * 57.29577951308232f; }
-
-// Small, simple circular-mean over your 24 booleans
-// simplest possible average (no circular wrap handling)
-
-// Use static inline to avoid multiple-definition if included in a header
-static inline float averageAngleCircular(const bool detections[24]) {
-  float sumX = 0.0f, sumY = 0.0f;
-  int count = 0;
-  for (int i = 0; i < 24; ++i) {
-    if (!detections[i]) continue;
-    const float th = toRad((float)SENSOR_ANGLES[i]);
-    sumX += cosf(th);
-    sumY += sinf(th);
-    ++count;
-  }
-  if (count == 0) return NAN;
-  float ang = toDeg(atan2f(sumY, sumX));
-  if (ang < 0.0f) ang += 360.0f;
-  return ang;
-}
-
-// usage inside findBallAngle():
-// const float avg = averageAngleSimple(sensorDetections);
-// if (isnan(avg)) Serial.println("Average angle: none");
-// else            Serial.println(avg, 1);
-// Function to read a specific sensor from a multiplexer
-bool readSensor(Multiplexer &mux, int sensorIndex) {
+bool MultiplexerAngle::readSensor(Multiplexer &mux, int sensorIndex) {
   // Select channel (assumes A0=LSB, A1=mid, A2=MSB)
   mux.A0Val = (sensorIndex & 0x01);
   mux.A1Val = (sensorIndex & 0x02);
@@ -125,13 +86,24 @@ bool readSensor(Multiplexer &mux, int sensorIndex) {
   return digitalRead(mux.outputPin) == LOW;
 }
 
+float MultiplexerAngle::averageAngleCircular(const bool detections[24]) const {
+  float sumX = 0.0f, sumY = 0.0f;
+  int count = 0;
+  for (int i = 0; i < 24; ++i) {
+    if (!detections[i]) continue;
+    const float th = toRad((float)SENSOR_ANGLES[i]);
+    sumX += cosf(th);
+    sumY += sinf(th);
+    ++count;
+  }
+  if (count == 0) return NAN;
+  float ang = toDeg(atan2f(sumY, sumX));
+  if (ang < 0.0f) ang += 360.0f;
+  return ang;
+}
 
-// Drop-in replacement: throttled printing but fast sensing
-void findBallAngle(bool dumpSensors = true, uint16_t period_ms = 500) {
-  static uint32_t last = 0;
-  
+void MultiplexerAngle::findBallAngle(bool dumpSensors, uint16_t period_ms) {
   // Always read sensors (keeps filters responsive)
-  bool sensorDetections[24] = {false};
   for (int i = 0; i < 8; i++) {
     bool raw1 = readSensor(multiplexer1, i);
     sensorDetections[i] = filters[i].process(raw1);
@@ -145,13 +117,15 @@ void findBallAngle(bool dumpSensors = true, uint16_t period_ms = 500) {
     sensorDetections[i + 16] = filters[i + 16].process(raw3);
   }
 
-  // Only print every period_ms
-  if (millis() - last < period_ms) return;
-  last = millis();
+  // Calculate the latest angle regardless of whether we're going to print it
+  latestAngle = averageAngleCircular(sensorDetections);
 
-  const float avg = averageAngleCircular(sensorDetections);
-  if (isnan(avg)) Serial.println("Average angle: none");
-  else            Serial.print("Average angle: "), Serial.println(avg, 1);
+  // Only print every period_ms
+  if (millis() - lastOutputTime < period_ms) return;
+  lastOutputTime = millis();
+
+  if (isnan(latestAngle)) Serial.println("Average angle: none");
+  else            Serial.print("Average angle: "), Serial.println(latestAngle, 1);
 
   if (dumpSensors) {
     for (int i = 0; i < 24; i++) {
@@ -163,9 +137,13 @@ void findBallAngle(bool dumpSensors = true, uint16_t period_ms = 500) {
   }
 }
 
-void loop() {
-  // Print once every 700 ms; set to 1000 for once per second
-  findBallAngle(/*dumpSensors=*/true, /*period_ms=*/700);
+float MultiplexerAngle::getLatestAngle() const {
+  return isnan(latestAngle) ? -1.0f : latestAngle;
 }
 
-
+bool MultiplexerAngle::getSensorDetection(int sensorIndex) const {
+  if (sensorIndex >= 0 && sensorIndex < 24) {
+    return sensorDetections[sensorIndex];
+  }
+  return false;
+}
