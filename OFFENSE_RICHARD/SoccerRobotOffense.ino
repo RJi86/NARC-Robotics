@@ -165,4 +165,113 @@ void loop() {
           
           // Check if angle is stable (ball caught)
           if (abs(smoothedAngle - lastBallAngle) <= ANGLE_STABLE_THRESHOLD) {
- 
+            // Angle is stable, check if stable for required time
+            if (millis() - stableAngleStartTime >= CATCH_TIME) {
+              Serial.println("Ball caught! Finding goal...");
+              ballCaught = true;
+              currentState = FIND_GOAL;
+            }
+          } else {
+            // Angle changed, reset timer
+            stableAngleStartTime = millis();
+            lastBallAngle = smoothedAngle;
+          }
+        }
+      }
+      break;
+      
+    case FIND_GOAL:
+      if (!ballCaught) {
+        // Lost the ball somehow
+        Serial.println("Ball lost! Starting over...");
+        currentState = FIND_BALL;
+        motors.Stop();
+      } else if (goalDetected) {
+        Serial.println("Goal found! Approaching...");
+        currentState = APPROACH_GOAL;
+      } else {
+        // Rotate slowly to find goal
+        motors.Rotation(0, ROTATION_SPEED * 0.7);
+        
+        // Double-check we still have the ball
+        if (ballAngle < 0 || countActiveSensors() < 3) {
+          Serial.println("Ball lost while finding goal!");
+          ballCaught = false;
+        }
+      }
+      break;
+      
+    case APPROACH_GOAL:
+      if (!ballCaught) {
+        // Lost the ball somehow
+        Serial.println("Ball lost! Starting over...");
+        currentState = FIND_BALL;
+        motors.Stop();
+      } else if (!goalDetected) {
+        Serial.println("Goal lost! Finding goal again...");
+        currentState = FIND_GOAL;
+        motors.Stop();
+      } else {
+        // Move toward goal
+        const GoalData& goal = goalDetector.getEnemyGoalData();
+        
+        // Simple center-goal approach
+        if (goal.x < 150) {
+          // Goal is left of center
+          motors.MoveDirection(PI * 1.75, APPROACH_SPEED);
+        } else if (goal.x > 170) {
+          // Goal is right of center
+          motors.MoveDirection(PI * 0.25, APPROACH_SPEED);
+        } else {
+          // Goal is centered, move straight
+          motors.MoveDirection(0, APPROACH_SPEED);
+        }
+        
+        // Check if we've reached the goal (would need distance sensor)
+        if (goal.distance < 20) {  // Assuming distance is in cm
+          // We scored!
+          Serial.println("GOAL SCORED!");
+          motors.Stop();
+          
+          // Start over
+          currentState = FIND_BALL;
+          ballCaught = false;
+        }
+      }
+      break;
+  }
+  
+  // Short delay
+  delay(10);
+}
+
+// Get smoothed angle by averaging recent readings
+float getSmoothedAngle(float newAngle) {
+  // Add new reading to array
+  recentReadings[readingIndex] = newAngle;
+  readingIndex = (readingIndex + 1) % READINGS_COUNT;
+  
+  // Count valid readings and calculate average
+  float sum = 0;
+  int validCount = 0;
+  for (int i = 0; i < READINGS_COUNT; i++) {
+    if (recentReadings[i] >= 0) {
+      sum += recentReadings[i];
+      validCount++;
+    }
+  }
+  
+  if (validCount == 0) return -1;
+  return sum / validCount;
+}
+
+// Count how many IR sensors are active (for ball proximity detection)
+int countActiveSensors() {
+  int count = 0;
+  for (int i = 0; i < 24; i++) {
+    if (ballSensor.getSensorDetection(i)) {
+      count++;
+    }
+  }
+  return count;
+}

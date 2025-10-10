@@ -1,0 +1,170 @@
+#include <Wire.h>
+#include <Arduino.h>
+#include "Motion/MotorClass.h"
+#include "Gyro/gyro.h"
+#include "IR/MultiplexerAngle.h"
+
+struct Wheels { float tl, tr, br, bl; };
+
+Gyro gyro;
+MotorClass motors; // already constructed elsewhere
+MultiplexerAngle ir;
+
+// Geometry & limits
+static const float WHEEL_RADIUS = 0.05f;     // 50 mm
+static const float Lx = 0.09f, Ly = 0.09f;   // m (tune)
+static const float MAX_WHEEL_RAD_S = 120.0f; // rad/s clamp
+
+const float GX = 0.0f;   // home goal X (m)
+const float GY = -1.5f;  // home goal Y (m)
+const float R_ORBIT = 0.6f; // desired orbit radius (m)
+
+
+// Translation controller
+static const float TANG_SPEED = 0.25f;  // m/s along arc
+static const float K_RAD      = 1.0f;   // m/s per m (radius hold)
+
+// Rotation controller
+static const float K_ALIGN    = 4.0f;   // rad/s per rad (collinearity)
+static const float K_REARLOCK = 3.0f;   // fallback: rear faces goal
+
+inline float wrapPi(float a){
+  while (a >  PI) a -= 2.0f*PI;
+  while (a < -PI) a += 2.0f*PI;
+  return a;
+}
+
+
+// 4-omni X-drive IK: +Vx forward, +Vy left, +Ω CCW
+static Wheels ik_xdrive(float Vx, float Vy, float Om){
+  const float k = (Lx + Ly);
+  Wheels w;
+  w.tl = ( Vx - Vy + k*Om ) / WHEEL_RADIUS; // top-left
+  w.tr = ( Vx + Vy - k*Om ) / WHEEL_RADIUS; // top-right
+  w.br = ( Vx - Vy - k*Om ) / WHEEL_RADIUS; // back-right
+  w.bl = ( Vx + Vy + k*Om ) / WHEEL_RADIUS; // back-left
+  return w;
+}
+
+/**
+ * orbitStepAlignBall
+ *  - Moves along circular arc around (gx,gy) with radius r_desired, CW/CCW
+ *  - Keeps robot, ball, goal collinear using ballAngleRobot (rad, robot frame)
+ *  - If ball not seen, falls back to "rear faces goal" heading lock
+ *
+ * Inputs:
+ *  x,y,theta     : robot pose in WORLD (m, m, rad)
+ *  gx,gy         : goal position
+ *  r_desired     : orbit radius (m)
+ *  cw            : true => clockwise, false => CCW
+ *  ballSeen      : whether IR detector currently has a valid lock
+ *  ballAngleRobot: angle of ball in ROBOT frame (rad), 0=front, +CCW
+ */
+
+float robot_x = 0.0f;
+float robot_y = 0.0f;
+float robot_theta = 0.0f;
+
+
+void orbitStepAlignBall(float x,float y,float theta,
+                        float gx,float gy,float r_desired,bool cw,
+                        bool ballSeen, float ballAngleRobot)
+{
+  // --- Build world-frame translation (tangent + gentle radial hold) ---
+  float dx = x - gx, dy = y - gy;
+  float r  = sqrtf(dx*dx + dy*dy); if (r < 1e-6f) r = 1e-6f;
+  float ux = dx/r,  uy = dy/r; // radial unit (goal->robot)
+
+  // tangent (perp to radial), choose CW/CCW
+  float tx = cw ? -uy :  uy;
+  float ty = cw ?  ux : -ux;
+
+  float Vt_x = tx * TANG_SPEED;
+  float Vt_y = ty * TANG_SPEED;
+
+  float Vr_x = ux * (K_RAD * (r_desired - r));
+  float Vr_y = uy * (K_RAD * (r_desired - r));
+
+  float Vw_x = Vt_x + Vr_x;   // world-frame desired velocity
+  float Vw_y = Vt_y + Vr_y;
+
+  // World -> Robot frame
+  float c = cosf(theta), s = sinf(theta);
+  float Vx =  c*Vw_x + s*Vw_y;
+  float Vy = -s*Vw_x + c*Vw_y;
+
+  // --- Rotation: keep robot, ball, goal collinear ---
+  // Goal angle in ROBOT frame:
+  float goalAngleRobot = wrapPi(atan2f(gy - y, gx - x) - theta);
+
+  float Om;
+  if (ballSeen) {
+    float beta  = wrapPi(ballAngleRobot);       // ball angle (robot frame)
+    float gamma = goalAngleRobot;               // goal angle (robot frame)
+
+    // Collinearity constraint: beta + gamma = π (mod 2π)
+    float e_align = wrapPi((beta + gamma) - PI);
+    Om = K_ALIGN * e_align;
+
+    // (Optional) small bias to keep goal roughly behind (help if IR is noisy):
+    // float e_rear = wrapPi(PI - gamma);
+    // Om += 0.3f * K_REARLOCK * e_rear;
+  } else {
+    // Fallback: keep REAR facing goal (front away from goal)
+    float theta_des = atan2f(dy, dx);           // front points away from goal
+    float e = wrapPi(theta_des - theta);
+    Om = K_REARLOCK * e;
+  }
+
+  // IK -> wheel speeds and drive
+  Wheels w = ik_xdrive(Vx, Vy, Om);
+  motors.setWheelRadPerSec(w.tl, w.tr, w.br, w.bl, MAX_WHEEL_RAD_S);
+}
+
+void updateOdometry(float dt) {
+  float vx = TANG_SPEED * cosf(robot_theta);
+  float vy = TANG_SPEED * sinf(robot_theta);
+  robot_x += vx * dt;
+  robot_y += vy * dt;
+}
+
+
+
+void setup() {
+  Wire.begin();
+  gyro.begin(Wire);
+  gyro.zeroToCurrent();  // sets initial heading = 0
+
+  ir.begin();  // <-- initialize multiplexers and filters
+
+  Serial.begin(115200);
+  Serial.println("Robot init complete");
+
+}
+
+
+void loop(){
+
+  gyro.update();
+  robot_theta = gyro.headingRad();
+
+  ir.findBallAngle(false, 0);  // update sensors each cycle, no print
+  float ballAngleDeg = ir.getLatestAngle(); // degrees, -1 if none
+  bool ballSeen = (ballAngleDeg >= 0.0f);
+
+  // Convert to radians, and flip sign to make CCW-positive
+  float ballAngleRobot = 0.0f;
+  if (ballSeen) {
+    ballAngleRobot = -ballAngleDeg * DEG_TO_RAD;  // flip sign (CCW-positive)
+    // optional wrap to [-π, π]
+    if (ballAngleRobot > PI) ballAngleRobot -= 2 * PI;
+  }
+
+
+  updateOdometry(0.02f);
+
+  orbitStepAlignBall(robot_x, robot_y, robot_theta,
+                     GX, GY, R_ORBIT, /*cw=*/true,
+                     ballSeen, ballAngleRobot);
+
+  delay(20); // 50 Hz
