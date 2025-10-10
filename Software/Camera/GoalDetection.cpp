@@ -20,8 +20,8 @@ GoalDetection::GoalDetection(int serialPort, unsigned long baudRate) {
     _debugEnabled = false;
     
     // Initialize goal data
-    _enemyGoal = {false, 0, 0, 0, 0};
-    _homeGoal = {false, 0, 0, 0, 0};
+    _enemyGoal = {false, false, 0, 0, 0, 0};
+    _homeGoal = {false, false, 0, 0, 0, 0};
     
     _inputBuffer = "";
     _messageComplete = false;
@@ -68,8 +68,16 @@ bool GoalDetection::isEnemyGoalDetected() const {
     return _enemyGoal.detected;
 }
 
+bool GoalDetection::isEnemyGoalInFront() const {
+    return _enemyGoal.detected && _enemyGoal.inFront;
+}
+
 bool GoalDetection::isHomeGoalDetected() const {
     return _homeGoal.detected;
+}
+
+bool GoalDetection::isHomeGoalInFront() const {
+    return _homeGoal.detected && _homeGoal.inFront;
 }
 
 const GoalData& GoalDetection::getEnemyGoalData() const {
@@ -102,8 +110,9 @@ void GoalDetection::readSerialData() {
 }
 
 void GoalDetection::processMessage(const String& message) {
-    // Parse message in format: TYPE,distance,height,x,y
+    // Parse message in format: TYPE,orientation,height,x,y
     // TYPE is 'E' for enemy, 'H' for home
+    // Orientation is 'F' for front, 'R' for rear
     
     // Check if the message is in the expected format
     if (message.length() < 5) {
@@ -130,7 +139,8 @@ void GoalDetection::processMessage(const String& message) {
     }
     
     // Extract values
-    float distance = message.substring(firstComma + 1, secondComma).toFloat();
+    char orientation = message.substring(firstComma + 1, secondComma)[0]; // 'F' or 'R'
+    bool inFront = (orientation == 'F');
     int height = message.substring(secondComma + 1, thirdComma).toInt();
     int xPos = message.substring(thirdComma + 1, fourthComma).toInt();
     int yPos = message.substring(fourthComma + 1).toInt();
@@ -138,15 +148,18 @@ void GoalDetection::processMessage(const String& message) {
     // Update the appropriate goal data
     if (goalType == 'E') {
         _enemyGoal.detected = true;
-        _enemyGoal.distance = distance;
+        _enemyGoal.inFront = inFront;
+        _enemyGoal.height = height;
         _enemyGoal.x = xPos;
         _enemyGoal.y = yPos;
         _enemyGoal.lastUpdateTime = millis();
         
         if (_debugEnabled) {
             Serial.print("Updated enemy goal: ");
-            Serial.print(distance);
-            Serial.print("cm, (");
+            Serial.print(inFront ? "FRONT" : "REAR");
+            Serial.print(", height: ");
+            Serial.print(height);
+            Serial.print(", Position: (");
             Serial.print(xPos);
             Serial.print(",");
             Serial.print(yPos);
@@ -155,15 +168,18 @@ void GoalDetection::processMessage(const String& message) {
     } 
     else if (goalType == 'H') {
         _homeGoal.detected = true;
-        _homeGoal.distance = distance;
+        _homeGoal.inFront = inFront;
+        _homeGoal.height = height;
         _homeGoal.x = xPos;
         _homeGoal.y = yPos;
         _homeGoal.lastUpdateTime = millis();
         
         if (_debugEnabled) {
             Serial.print("Updated home goal: ");
-            Serial.print(distance);
-            Serial.print("cm, (");
+            Serial.print(inFront ? "FRONT" : "REAR");
+            Serial.print(", height: ");
+            Serial.print(height);
+            Serial.print(", Position: (");
             Serial.print(xPos);
             Serial.print(",");
             Serial.print(yPos);
@@ -200,9 +216,11 @@ void GoalDetection::printGoalStatus() {
     // Print enemy goal status
     Serial.print("Enemy Goal: ");
     if (_enemyGoal.detected) {
-        Serial.print("Detected at ");
-        Serial.print(_enemyGoal.distance);
-        Serial.print("cm, Position: (");
+        Serial.print("Detected (");
+        Serial.print(_enemyGoal.inFront ? "FRONT" : "REAR");
+        Serial.print("), Height: ");
+        Serial.print(_enemyGoal.height);
+        Serial.print(", Position: (");
         Serial.print(_enemyGoal.x);
         Serial.print(",");
         Serial.print(_enemyGoal.y);
@@ -214,9 +232,11 @@ void GoalDetection::printGoalStatus() {
     // Print home goal status
     Serial.print("Home Goal: ");
     if (_homeGoal.detected) {
-        Serial.print("Detected at ");
-        Serial.print(_homeGoal.distance);
-        Serial.print("cm, Position: (");
+        Serial.print("Detected (");
+        Serial.print(_homeGoal.inFront ? "FRONT" : "REAR");
+        Serial.print("), Height: ");
+        Serial.print(_homeGoal.height);
+        Serial.print(", Position: (");
         Serial.print(_homeGoal.x);
         Serial.print(",");
         Serial.print(_homeGoal.y);

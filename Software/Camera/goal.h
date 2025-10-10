@@ -4,7 +4,8 @@
 // Structure to hold goal detection data
 struct GoalData {
     bool detected;          // Whether goal is currently detected
-    float distance;         // Distance to goal in cm
+    bool inFront;           // Whether goal is in front (true) or rear (false)
+    int height;             // Height in pixels
     int x;                  // X position on camera/sensor
     int y;                  // Y position on camera/sensor
     unsigned long lastUpdateTime;  // Last time this data was updated

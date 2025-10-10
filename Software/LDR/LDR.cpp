@@ -7,7 +7,7 @@ namespace {
   inline float toDeg(float rad) { return rad * 57.29577951308232f; }
 
   // Average a few reads to build a stable baseline per channel.
-  int baselineRead(Multiplexer &mux, int sensorIndex,
+  int baselineRead(Multiplexer_LDR &mux, int sensorIndex,
                    uint8_t SAMPLES = 8, uint16_t SETTLE_US = 200) {
     long acc = 0;
     for (uint8_t k = 0; k < SAMPLES; ++k) {

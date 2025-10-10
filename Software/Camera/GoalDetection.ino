@@ -4,8 +4,8 @@
 #define SERIAL_BAUD_RATE 115200
 
 // Goal detection data
-GoalData enemyGoal = {false, 0, 0, 0, 0};
-GoalData homeGoal = {false, 0, 0, 0, 0};
+GoalData enemyGoal = {false, false, 0, 0, 0, 0};
+GoalData homeGoal = {false, false, 0, 0, 0, 0};
 
 // Constants
 const unsigned long DETECTION_TIMEOUT = 500; // Consider detection lost after 500ms
@@ -69,8 +69,9 @@ void readSerialData() {
 }
 
 void processMessage(String message) {
-  // Parse message in format: TYPE,distance,height,x,y
+  // Parse message in format: TYPE,orientation,height,x,y
   // TYPE is 'E' for enemy, 'H' for home
+  // Orientation is 'F' for front, 'R' for rear
   
   // Check if the message is in the expected format
   if (message.length() < 5) {
@@ -97,7 +98,8 @@ void processMessage(String message) {
   }
   
   // Extract values
-  float distance = message.substring(firstComma + 1, secondComma).toFloat();
+  char orientation = message.substring(firstComma + 1, secondComma)[0]; // 'F' or 'R'
+  bool inFront = (orientation == 'F');
   int height = message.substring(secondComma + 1, thirdComma).toInt();
   int xPos = message.substring(thirdComma + 1, fourthComma).toInt();
   int yPos = message.substring(fourthComma + 1).toInt();
@@ -105,14 +107,17 @@ void processMessage(String message) {
   // Update the appropriate goal data
   if (goalType == 'E') {
     enemyGoal.detected = true;
-    enemyGoal.distance = distance;
+    enemyGoal.inFront = inFront;
+    enemyGoal.height = height;  // Store height instead of distance
     enemyGoal.x = xPos;
     enemyGoal.y = yPos;
     enemyGoal.lastUpdateTime = millis();
     
     Serial.print("Updated enemy goal: ");
-    Serial.print(distance);
-    Serial.print("cm, (");
+    Serial.print(inFront ? "FRONT" : "REAR");
+    Serial.print(", height: ");
+    Serial.print(height);
+    Serial.print(", Position: (");
     Serial.print(xPos);
     Serial.print(",");
     Serial.print(yPos);
@@ -120,14 +125,17 @@ void processMessage(String message) {
   } 
   else if (goalType == 'H') {
     homeGoal.detected = true;
-    homeGoal.distance = distance;
+    homeGoal.inFront = inFront;
+    homeGoal.height = height;  // Store height instead of distance
     homeGoal.x = xPos;
     homeGoal.y = yPos;
     homeGoal.lastUpdateTime = millis();
     
     Serial.print("Updated home goal: ");
-    Serial.print(distance);
-    Serial.print("cm, (");
+    Serial.print(inFront ? "FRONT" : "REAR");
+    Serial.print(", height: ");
+    Serial.print(height);
+    Serial.print(", Position: (");
     Serial.print(xPos);
     Serial.print(",");
     Serial.print(yPos);
@@ -163,9 +171,11 @@ void printGoalStatus() {
   // Print enemy goal status
   Serial.print("Enemy Goal: ");
   if (enemyGoal.detected) {
-    Serial.print("Detected at ");
-    Serial.print(enemyGoal.distance);
-    Serial.print("cm, Position: (");
+    Serial.print("Detected (");
+    Serial.print(enemyGoal.inFront ? "FRONT" : "REAR");
+    Serial.print("), Height: ");
+    Serial.print(enemyGoal.height);
+    Serial.print(", Position: (");
     Serial.print(enemyGoal.x);
     Serial.print(",");
     Serial.print(enemyGoal.y);
@@ -177,9 +187,11 @@ void printGoalStatus() {
   // Print home goal status
   Serial.print("Home Goal: ");
   if (homeGoal.detected) {
-    Serial.print("Detected at ");
-    Serial.print(homeGoal.distance);
-    Serial.print("cm, Position: (");
+    Serial.print("Detected (");
+    Serial.print(homeGoal.inFront ? "FRONT" : "REAR");
+    Serial.print("), Height: ");
+    Serial.print(homeGoal.height);
+    Serial.print(", Position: (");
     Serial.print(homeGoal.x);
     Serial.print(",");
     Serial.print(homeGoal.y);

@@ -1,0 +1,7 @@
+#pragma once
+
+#include <Arduino.h>
+
+#include <core/platform_detection.h>
+
+#define vector_type double

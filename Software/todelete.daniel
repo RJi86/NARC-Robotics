@@ -278,4 +278,9 @@ float getSmoothedAngle(float newAngle) {
 int countActiveSensors() {
   int count = 0;
   for (int i = 0; i < 24; i++) {
-    if (bal
+    if (ballSensor.getSensorDetection(i)) {
+      count++;
+    }
+  }
+  return count;
+}

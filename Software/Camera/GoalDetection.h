@@ -19,8 +19,14 @@ public:
     // Get the current enemy goal status
     bool isEnemyGoalDetected() const;
     
+    // Get whether enemy goal is in front (true) or rear (false)
+    bool isEnemyGoalInFront() const;
+    
     // Get the current home goal status
     bool isHomeGoalDetected() const;
+    
+    // Get whether home goal is in front (true) or rear (false)
+    bool isHomeGoalInFront() const;
     
     // Get detailed goal data
     const GoalData& getEnemyGoalData() const;
