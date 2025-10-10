@@ -32,6 +32,10 @@ blue_distance_measurements = []
 enemy_goal_color_name = None
 home_goal_color_name = None
 
+# Add constant for front/rear boundary (middle of the image)
+IMAGE_WIDTH = 320  # QVGA resolution is 320x240
+IMAGE_WIDTH_BOUNDARY = IMAGE_WIDTH // 2  # Dividing line between front and rear view
+
 # Initialize UART communication
 uart = UART(3, 115200, timeout_char=1000)
 uart.init(115200, bits=8, parity=None, stop=1, timeout_char=1000)
@@ -119,12 +123,24 @@ def safe_frame_operation():
             print(f"Second frame capture failed: {e}")
             return None
 
-def send_goal_data_to_arduino(goal_type, distance_cm, height_pixels, x_pos, y_pos):
-    """Send goal detection data to Arduino via UART"""
+# New function to determine if object is at front or rear
+def determine_orientation(x_position):
+    """Determine if an object is in the front or rear view based on x position"""
+    if x_position < IMAGE_WIDTH_BOUNDARY:
+        return 'F'  # Front
+    else:
+        return 'R'  # Rear
+
+# Modified function to send goal data to Arduino with orientation instead of distance
+def send_goal_data_to_arduino(goal_type, orientation, height_pixels, x_pos, y_pos):
+    """
+    Send goal detection data to Arduino via UART
+    goal_type: 'E' for enemy, 'H' for home
+    orientation: 'F' for front, 'R' for rear
+    """
     try:
-        # Format: TYPE,distance,height,x,y\n
-        # TYPE is 'E' for enemy, 'H' for home
-        data_string = f"{goal_type},{distance_cm:.1f},{height_pixels},{x_pos},{y_pos}\n"
+        # Format: TYPE,orientation,height,x,y\n
+        data_string = f"{goal_type},{orientation},{height_pixels},{x_pos},{y_pos}\n"
 
         # Send data over UART
         uart.write(data_string.encode())
@@ -139,8 +155,11 @@ LAST_SEND_TIME_E = 0
 LAST_SEND_TIME_H = 0
 SEND_INTERVAL_MS = 200  # send every 200ms (5 Hz)
 
-Hz)
-
+# Draw a boundary line to visualize front/rear separation
+def draw_boundary(img):
+    img.draw_line(IMAGE_WIDTH_BOUNDARY, 0, IMAGE_WIDTH_BOUNDARY, img.height()-1, color=(255, 0, 255))
+    img.draw_string(IMAGE_WIDTH_BOUNDARY - 40, 10, "FRONT", color=(255, 0, 255))
+    img.draw_string(IMAGE_WIDTH_BOUNDARY + 10, 10, "REAR", color=(255, 0, 255))
 
 # Step 3: Main loop to detect the enemy goal color and blobs
 while True:
@@ -150,6 +169,9 @@ while True:
 
         if img is None:
             continue  # Skip this iteration if frame capture failed
+            
+        # Draw the boundary line between front and rear views
+        draw_boundary(img)
 
         # Initial enemy goal detection with 3-second buffer
         if not initial_detection_done:
@@ -252,15 +274,19 @@ while True:
 
             # Process the largest enemy blob if found
             if largest_enemy_blob and largest_enemy_blob.h() > 0:
-                # Calculate distance using only height
+                # Calculate distance for display purposes only
                 blob_height = largest_enemy_blob.h()
                 raw_distance = calculate_distance(blob_height)
                 distance_cm = get_filtered_distance(raw_distance, "enemy")
+                
+                # Determine orientation (front or rear)
+                orientation = determine_orientation(largest_enemy_blob.cx())
+                orientation_text = "Front" if orientation == 'F' else "Rear"
 
                 if distance_cm is not None:
                     # Draw visual indicators
                     color = (255, 0, 0)  # Red color for enemy blobs
-                    label = f"Enemy: {distance_cm:.1f}cm"
+                    label = f"Enemy ({orientation_text}): {distance_cm:.1f}cm"
 
                     img.draw_rectangle(largest_enemy_blob.rect(), color=color)
                     img.draw_cross(largest_enemy_blob.cx(), largest_enemy_blob.cy(), color=color)
@@ -275,25 +301,28 @@ while True:
                     img.draw_string(largest_enemy_blob.cx(), largest_enemy_blob.cy() - 20,
                                    label, color=color)
 
-                    # Send data to Arduino
+                    # Send data to Arduino (now with orientation instead of distance)
                     current_time = time.ticks_ms()
                     if time.ticks_diff(current_time, LAST_SEND_TIME_E) >= SEND_INTERVAL_MS:
-                        send_goal_data_to_arduino('E', distance_cm, blob_height,
+                        send_goal_data_to_arduino('E', orientation, blob_height,
                                                   largest_enemy_blob.cx(), largest_enemy_blob.cy())
                         LAST_SEND_TIME_E = current_time
 
-
             # Process the largest home blob if found
             if largest_home_blob and largest_home_blob.h() > 0:
-                # Calculate distance using only height
+                # Calculate distance for display purposes only
                 blob_height = largest_home_blob.h()
                 raw_distance = calculate_distance(blob_height)
                 distance_cm = get_filtered_distance(raw_distance, "home")
+                
+                # Determine orientation (front or rear)
+                orientation = determine_orientation(largest_home_blob.cx())
+                orientation_text = "Front" if orientation == 'F' else "Rear"
 
                 if distance_cm is not None:
                     # Draw visual indicators
                     color = (0, 255, 0)  # Green color for home blobs
-                    label = f"Home: {distance_cm:.1f}cm"
+                    label = f"Home ({orientation_text}): {distance_cm:.1f}cm"
 
                     img.draw_rectangle(largest_home_blob.rect(), color=color)
                     img.draw_cross(largest_home_blob.cx(), largest_home_blob.cy(), color=color)
@@ -308,10 +337,10 @@ while True:
                     img.draw_string(largest_home_blob.cx(), largest_home_blob.cy() - 20,
                                    label, color=color)
 
-                    # Send data to Arduino
+                    # Send data to Arduino (now with orientation instead of distance)
                     current_time = time.ticks_ms()
                     if time.ticks_diff(current_time, LAST_SEND_TIME_H) >= SEND_INTERVAL_MS:
-                        send_goal_data_to_arduino('H', distance_cm, blob_height,
+                        send_goal_data_to_arduino('H', orientation, blob_height,
                                             largest_home_blob.cx(), largest_home_blob.cy())
                         LAST_SEND_TIME_H = current_time
 

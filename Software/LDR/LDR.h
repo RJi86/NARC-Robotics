@@ -23,7 +23,7 @@ public:
 
 private:
     Multiplexer multiplexer;
-    const float LDR_ANGLES[8]{
+    const float SensorAngles[8]{
       22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5
     };
     const float LDR_DIFFERENCE[8]{
