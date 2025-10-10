@@ -34,7 +34,6 @@ inline float wrapPi(float a){
   return a;
 }
 
-
 // 4-omni X-drive IK: +Vx forward, +Vy left, +Ω CCW
 static Wheels ik_xdrive(float Vx, float Vy, float Om){
   const float k = (Lx + Ly);
@@ -64,7 +63,6 @@ static Wheels ik_xdrive(float Vx, float Vy, float Om){
 float robot_x = 0.0f;
 float robot_y = 0.0f;
 float robot_theta = 0.0f;
-
 
 void orbitStepAlignBall(float x,float y,float theta,
                         float gx,float gy,float r_desired,bool cw,
