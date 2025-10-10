@@ -1,5 +1,5 @@
-#ifndef VECTOR_MOTOR_CONTROL_H
-#define VECTOR_MOTOR_CONTROL_H
+#ifndef VECTOR_MOTOR_CLASS_H
+#define VECTOR_MOTOR_CLASS_H
 
 #include <Arduino.h>
 #include "maths/vector2.h"

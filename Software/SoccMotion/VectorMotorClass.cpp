@@ -1,4 +1,4 @@
-#include "VectorMotorControl.h"
+#include "VectorMotorClass.h"
 
 VectorMotorControl::VectorMotorControl() {
     // Initialize motor pin configurations

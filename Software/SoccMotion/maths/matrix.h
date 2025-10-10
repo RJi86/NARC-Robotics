@@ -2,6 +2,6 @@
 
 #include <Arduino.h>
 
-#include <core/platform_detection.h>
+#include <platform_detection.h>
 
 #define matrix_type double
