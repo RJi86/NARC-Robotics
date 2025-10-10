@@ -33,7 +33,6 @@ void MotorClass::MoveDirection(float theta, float speed) {
     float x = 0;
     float y = -1;
   }
-  
 
   float motion[3] = {0}; // four motor speeds
   float x = 1;

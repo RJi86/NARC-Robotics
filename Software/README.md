@@ -1,0 +1,3 @@
+- Need to change the pins for motors
+- Need to make sure the mouth knows when ball is caught ✅
+- Put everything together!
