@@ -2,6 +2,6 @@
 
 #include <Arduino.h>
 
-#include <core/platform_detection.h>
+#include <platform_detection.h>
 
 #define vector_type double
